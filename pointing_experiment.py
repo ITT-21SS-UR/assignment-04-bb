@@ -31,7 +31,7 @@ class PointingModel(object):
         self.novel_technique = novel_technique
         self.repetitions = repetitions
         self.log_writer = csv.writer(sys.stdout)
-        sys.stdout.write("user_id, elapsed_conditions, elapsed_repetitions,"
+        #sys.stdout.write("user_id, elapsed_conditions, elapsed_repetitions,"
                                   "target, click_offset, distance, time, errors, timestamp \n")
 
     # creates latin squares for counter balancing and selects square baed on user id

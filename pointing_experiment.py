@@ -4,7 +4,6 @@ import math
 import random
 from PyQt5 import QtGui, QtWidgets, QtCore
 import csv
-
 from pointing_technique import NovelTechnique
 
 """
@@ -16,16 +15,23 @@ setup file should look like this:
   "MAXSCREENSIZE": 1000,
   "USE_NOVEL_TECHNIQUE": ""
 }
+USER_ID defines ID of participant
+REPETITIONS defines how often a condition will be repeated 
+CIRCLES defines how many rows and column of circles will be drawn. Each entry in the list represents as different
+condition larger x and y values means smaller targets.
+MAXSCREENSIZE represents the maximum value a screen can be either in y or x
+USE_NOVEL_TECHNIQUE defines if pointing_technique.py is used. Needs to be "yes" so the technique is used. Every other
+string means "no"
 """
 
 
 class PointingModel(object):
 
-    def __init__(self, user_id, circles, max_size, use_novel_technique, repetitions):
+    def __init__(self, user_id, ratios, max_size, use_novel_technique, repetitions):
         self.timer = QtCore.QTime()
         self.user_id = user_id
-        self.latin_square = self.balanced_latin_squares(len(circles), user_id)
-        self.circles = circles
+        self.latin_square = self.balanced_latin_squares(len(ratios), user_id)
+        self.ratios = ratios
         self.current_size = [0, 0]
         self.max_size = max_size
         self.elapsed_repetitions = 0
@@ -36,7 +42,7 @@ class PointingModel(object):
         self.repetitions = repetitions
         self.log_writer = csv.writer(sys.stdout)
 
-    # creates latin squares for counter balancing and selects square baed on user id
+    # creates latin squares for counter balancing and selects square based on user id
     # code for creating squares taken from https://medium.com/@graycoding/balanced-latin-squares-in-python-2c3aa6ec95b9
     def balanced_latin_squares(self, n, user_id):
         lst = [[((j // 2 + 1 if j % 2 else n - j // 2) + i) % n + 1 for j in range(n)] for i in range(n)]
@@ -45,23 +51,9 @@ class PointingModel(object):
         square = lst[(user_id % len(lst))]
         return square
 
-    '''def start_measurement(self):
-        if not self.mouse_moving:
-            self.timer.start()
-            self.mouse_moving = True
-
-    def stop_measurement(self):
-        if self.mouse_moving:
-            elapsed = self.timer.elapsed()
-            self.mouse_moving = False
-            return elapsed
-        else:
-            self.debug("not running")
-            return -1
-    '''
     # sets highlight color depending on the current condition
     def setCircles(self):
-        self.current_size = self.circles[self.latin_square[self.elapsed_conditions]-1]
+        self.current_size = self.ratios[self.latin_square[self.elapsed_conditions]-1]
 
     # checks if click was on the current target
     def clickOnTarget(self, click_pos, target):
@@ -82,7 +74,7 @@ class PointingModel(object):
     # logs test results to tdout in csv format
     def logging(self, click_offset, distance, target, time):
         self.log_writer.writerow([self.user_id, self.current_size, self.max_size, self.use_novel_technique,
-                                  self.elapsed_repetitions, target, click_offset, distance, time,
+                                  self.elapsed_repetitions, target, click_offset, round(distance, ), time,
                                   self.errors, self.timestamp()])
 
     # returns timestamp of current time
@@ -118,15 +110,16 @@ class PointingTest(QtWidgets.QWidget):
             self.circles = self.drawCircles(qp)
         qp.end()
 
+    # draws and calculates screen size based defined max screen size and current circle ratio
     def drawScreen(self):
-        if not self.model.elapsed_conditions >= len(self.model.circles):
+        if not self.model.elapsed_conditions >= len(self.model.ratios):
             self.model.setCircles()
             if self.model.current_size[0] > self.model.current_size[1]:
-                self.screen_x_size = int(self.model.max_size * self.model.current_size[1] / self.model.current_size[0])
+                self.screen_x_size = int(self.model.max_size * self.model.current_size[0] / self.model.current_size[1])
                 self.screen_y_size = int(self.model.max_size)
             else:
                 self.screen_x_size = int(800)
-                self.screen_y_size = int(800 * self.model.current_size[0] / self.model.current_size[1])
+                self.screen_y_size = int(800 * self.model.current_size[1] / self.model.current_size[0])
             self.start_pos = (self.screen_x_size / 2, self.screen_y_size / 2)
             self.setGeometry(0, 0, self.screen_x_size, self.screen_y_size)
             self.setFixedSize(self.screen_x_size, self.screen_y_size)
@@ -135,11 +128,11 @@ class PointingTest(QtWidgets.QWidget):
         qp.setBrush(QtGui.QColor(200, 200, 200))
         qp.drawRect(event.rect())
 
-
+    # draws explanation and end screen
     def drawExplanation(self, event, qp):
         qp.setPen(QtGui.QColor(168, 34, 3))
         qp.setFont(QtGui.QFont('Decorative', 11))
-        if self.model.elapsed_conditions >= len(self.model.circles):
+        if self.model.elapsed_conditions >= len(self.model.ratios):
             self.text = "The test is done, good job!. \n " \
                         "Press any key to exit"
         else:
@@ -152,7 +145,7 @@ class PointingTest(QtWidgets.QWidget):
     # is called when key is pressed an starts a test with the current condition. Quits app if all conditions were tested
     def keyPressEvent(self, event):
         if self.show_explanation:
-            if self.model.elapsed_conditions >= len(self.model.circles):
+            if self.model.elapsed_conditions >= len(self.model.ratios):
                 sys.exit()
             else:
                 self.show_explanation = False
@@ -160,32 +153,28 @@ class PointingTest(QtWidgets.QWidget):
                 self.update()
 
     # is called when mouse button is clicked and then calls the clickOnTarget function of the model
+    # if novel technique is used, mouse is set on the nearest target before clickOnTarget is called
     def mousePressEvent(self, event):
         if not self.show_explanation:
-            click_pos = [event.x(), event.y()]
-            if self.model.clickOnTarget(click_pos, self.target_circle):
+            if self.model.use_novel_technique:
+                pointer_pos = self.novel_technique.filter(self.getCurrentPointerPosition())
+                self.setMousePosition(pointer_pos)
+            else:
+                pointer_pos = self.getCurrentPointerPosition()
+            if self.model.clickOnTarget(pointer_pos, self.target_circle):
                 if self.model.elapsed_repetitions == 0:
                     self.show_explanation = True
                 self.update()
 
-    def mouseMoveEvent(self, event):
-        if self.model.use_novel_technique:
-            if self.target_circle != 0:
-                target_pos = (self.target_circle[0], self.target_circle[1])
-                curr_pos = (QtWidgets.QWidget.mapFromGlobal(self, QtGui.QCursor.pos()).x(),
-                        QtWidgets.QWidget.mapFromGlobal(self, QtGui.QCursor.pos()).y())
-                pointer_pos = self.novel_technique.filter(novel_technique, target_pos, curr_pos)
-                #print(curr_pos)
-                point = QtCore.QPoint(pointer_pos[0], pointer_pos[1])
-                #print(point)
-                QtGui.QCursor.setPos(QtWidgets.QWidget.mapToGlobal(self, point))
-                curr_pos = (QtWidgets.QWidget.mapFromGlobal(self, QtGui.QCursor.pos()).x(),
-                        QtWidgets.QWidget.mapFromGlobal(self, QtGui.QCursor.pos()).y())
-                print("new current pos:")
-                print(curr_pos)
+    # returns current position of the pointer
+    def getCurrentPointerPosition(self):
+        curr_pos = (QtWidgets.QWidget.mapFromGlobal(self, QtGui.QCursor.pos()).x(),
+                    QtWidgets.QWidget.mapFromGlobal(self, QtGui.QCursor.pos()).y())
+        return curr_pos
 
-    # draws circles on window
+    # draws circles on window and sets up novel technique if it is used
     def drawCircles(self, qp):
+        self.circles = []
         x_circles = self.model.current_size[0]
         y_circles = self.model.current_size[1]
         circle_value = max(x_circles, y_circles)
@@ -197,8 +186,8 @@ class PointingTest(QtWidgets.QWidget):
         pos_x = int(distance/2)
         target_num = random.randint(0, (x_circles*y_circles)-1)
         check_target = 0
-        for i in range(x_circles):
-            for k in range(y_circles):
+        for i in range(y_circles):
+            for k in range(x_circles):
                 if check_target == target_num:
                     qp.setBrush(QtGui.QColor(100, 0, 0))
                     qp.setPen(QtGui.QColor(100, 0, 0))
@@ -212,7 +201,8 @@ class PointingTest(QtWidgets.QWidget):
                 check_target += 1
             pos_x = distance/2
             pos_y += self.diameter + distance
-        self.novel_technique = NovelTechnique(self.circles, self.diameter)
+        if self.model.use_novel_technique:
+            self.novel_technique = NovelTechnique(self.circles, self.model.current_size)
         self.setMousePosition(self.start_pos)
         return self.circles
 

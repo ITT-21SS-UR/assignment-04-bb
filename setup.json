@@ -1,11 +1,7 @@
 {
-  "USER_ID": 1,
-  "REPETITIONS": 5,
-  "COLORS": [
-    [200, 0, 0],
-    [0, 200, 0],
-    [0, 0, 200]
-  ],
-  "TARGETS": [4, 6],
-  "USE_NOVEL_TECHNIQUE": ""
+  "USER_ID": 4,
+  "REPETITIONS": 10,
+  "CIRCLES": [[8,4],[10,5],[20,10]],
+  "MAXSCREENSIZE": 1000,
+  "USE_NOVEL_TECHNIQUE": "yes"
 }
